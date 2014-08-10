@@ -57,6 +57,17 @@ void printTree(const pair<int, const ptree&>& rNode )
 	}
 }  
 
+/*
+  新建一个box,其名字为boxname
+  in:
+  pt root的地址
+  boxname 新box的名字
+  out:(none)
+  return:
+  -1 创建失败
+  -2 已存在boxname
+  1 创建成功
+*/
 int AddNewBox(ptree& pt,string boxname){
 	//检查是否含有root
 	ptree NodeBox;
@@ -90,8 +101,18 @@ int AddNewBox(ptree& pt,string boxname){
 	
 }
 
+/*
+  判断在同一节点下是否存name的文件（夹）
+  in:
+  pt 判断的节点，文件夹节点("folders")或文件节点("files")
+  name 要判断的文件(夹)的名
 
-//判断在同一节点下是否存name的文件（夹）
+  out:(none)
+
+  return:
+  true 存在
+  false 不存在
+*/
 bool SameNameInOneNode(ptree pt,string name){
 
 	if(pt.empty() == true){
@@ -107,13 +128,19 @@ bool SameNameInOneNode(ptree pt,string name){
 
 }
 
-//将File添加至指定BOX
-//out
 /*
-1为成功
--2为有重复的文件名
--1为失败，不存在box
-0为失败，原因未知
+  直接将文件添加至指定Box
+  in:
+   pt_root root节点地址
+   FileName 要添加文件的文件名
+   BoxName 指定Box的名字
+   creatifnotfound 如果指定的Box不存在是否创建，默认为不创建
+  out:（none)
+  return:
+   1为成功
+   -2为有重复的文件名
+   -1为失败，不存在box(creatifnotfound == false时才会返回)
+   0为失败，原因未知
 */
 int AddFileToBox(ptree& pt_root,string FileName,string BoxName,bool creatifnotfound = false){
 	
@@ -156,8 +183,20 @@ int AddFileToBox(ptree& pt_root,string FileName,string BoxName,bool creatifnotfo
 	return 0;
 }
 
-
-//return -2为文件已存在
+/*
+  直接将文件添加至指定Box
+  in:
+   pt_box box节点地址
+   FileName 要添加文件的文件名
+   BoxName 指定Box的名字
+   creatifnotfound 如果指定的Box不存在是否创建，默认为不创建
+  out:（none)
+  return:
+   1为成功
+   -2为有重复的文件名
+   -1为失败，不存在box(creatifnotfound == false时才会返回)
+   0为失败，原因未知
+*/
 int AddFileToBox(ptree& pt_box,string FileName){
 
 
@@ -180,12 +219,19 @@ int AddFileToBox(ptree& pt_box,string FileName){
 
 
 
-//out
 /*
-1为成功
--2为有文件夹已存在
--1为失败，不存在box
-0为失败，原因未知
+  直接将文件夹添加至指定Box
+  in:
+   pt root节点地址
+   FolderName 要添加的文件夹名
+   BoxName 指定Box的名字
+   creatifnotfound 如果指定的Box不存在是否创建，默认为不创建
+  out:（none)
+  return:
+   1为成功
+   -2为有重复的文件夹
+   -1为失败，不存在box(creatifnotfound == false时才会返回)
+   0为失败，原因未知
 */
 int AddFolderToBox(ptree& pt,string FolderName,string BoxName,bool creatifnotfound = false){
 	
@@ -227,7 +273,20 @@ int AddFolderToBox(ptree& pt,string FolderName,string BoxName,bool creatifnotfou
 	return 0;
 }
 
-//-2为已存在
+/*
+  直接将文件夹添加至指定Box
+  in:
+   pt_box box节点地址
+   FolderName 要添加的文件夹名
+   BoxName 指定Box的名字
+   creatifnotfound 如果指定的Box不存在是否创建，默认为不创建
+  out:（none)
+  return:
+   1为成功
+   -2为有重复的文件夹
+   -1为失败，不存在box(creatifnotfound == false时才会返回)
+   0为失败，原因未知
+*/
 int AddFolderToBox(ptree& pt_box,string FolderName){
 
 
@@ -248,10 +307,16 @@ int AddFolderToBox(ptree& pt_box,string FolderName){
 
 }
 
-//将文件Filename添加至文件夹pt_Folder节点上
-//返回值:
-//-2为文件已存在
-//1为成功
+/*
+  通过文件夹节点，将文件添加至文件夹
+  in:
+	pt_Folder 指定的文件夹节点
+	FileName 要添加的文件名
+  out:(none)
+  return:
+	-2 文件已存在
+	1 添加成功
+*/
 int AddFileToFloderNode(ptree& pt_Folder,string FileName){
 	try{
 		if(SameNameInOneNode(pt_Folder.get_child("files"),FileName) ){
@@ -268,6 +333,16 @@ int AddFileToFloderNode(ptree& pt_Folder,string FileName){
 	return 1;
 }
 
+/*
+  通过文件夹节点，将文件夹添加至文件夹
+  in:
+	pt_Folder 指定的文件夹节点
+	FileName 要添加的文件夹名
+  out:(none)
+  return:
+	-2 文件夹已存在
+	1 添加成功
+*/
 int AddFolderToFloderNode(ptree& pt_Folder,string FolderName){
 
 	try{
@@ -288,6 +363,19 @@ int AddFolderToFloderNode(ptree& pt_Folder,string FolderName){
 	
 }
 
+/*
+  替换字符串
+  将str中的findstr字符串替换为Tostr
+  in:
+	str 要更改的字符串
+	Tostr 目的字符串
+	findstr 要找到的字符串
+
+   out:(none)
+
+   return:
+	返回替换后的字符串
+*/
 string replacestring(string str,string Tostr,string findstr){
 
 	string value = str;
@@ -304,7 +392,25 @@ string replacestring(string str,string Tostr,string findstr){
 }
 
 
-//通过文件夹路径创建文件夹
+/*
+   将文件夹添加至文件夹(box)节点,如果路径不存在将会被创建
+   例如:
+	将folder1/folder2/添加至foldermain中
+	AddFolderPathToFolderNode( pt_Folder ,"folder1/folder2/")
+	pt_Folder为指向文件夹(或box)foldermain的地址
+   ========================================================
+   in:
+	pt_Folder 指定文件夹(或box)的地址
+	FullPath 要添加的文件夹的地址
+	*注意:FullPath中不包括指定文件夹的名字
+   -------------------------------------------------------
+   out:(none)
+   -------------------------------------------------------
+   return:
+	0或-1 失败
+	1 创建成功
+	-2 文件夹已存在
+*/
 int AddFolderPathToFolderNode(ptree& pt_Folder,string FullPath){
 	
 	
@@ -357,6 +463,27 @@ int AddFolderPathToFolderNode(ptree& pt_Folder,string FullPath){
 	return add;
 }
 
+/*
+   将文件添加至文件夹(box)节点,如果路径不存在将会被创建
+   例如:
+	将folder1/file1添加至foldermain中
+	AddFolderPathToFolderNode( pt_Folder ,"folder1/file1")
+	pt_Folder为指向文件夹(或box)foldermain的地址
+   ========================================================
+   in:
+	pt_Folder 指定文件夹(或box)的地址
+	FullPath 要添加的文件夹的地址
+	*注意:FullPath中不包括指定文件夹(或box)的名字
+   -------------------------------------------------------
+   out:(none)
+   -------------------------------------------------------
+   return:
+	0或-1 失败
+	1 创建成功
+	-2 文件夹已存在
+
+	*注意:FunctionInsideValue_NoNeedInput为函数迭代需要调用的值，使用者不需要赋值
+*/
 int AddFilePathToFolderNode(ptree& pt_Folder,string FullPath,bool FunctionInsideValue_NoNeedInput = false){
 	
 	
@@ -431,11 +558,12 @@ int AddFilePathToFolderNode(ptree& pt_Folder,string FullPath,bool FunctionInside
 		*注意：FolderPath第一位为BoxNmae
 	CreatIfNotFound 如果目录不存在是否创建 默认不创建
  --------------------------------------------------
- out:
- 返回整数型
- -1或0为创建失败
- 1为创建成功
- -2为路径已存在
+ out:(none)
+
+ return:
+	 -1或0为创建失败
+	 1为创建成功
+	 -2为路径已存在
 */
 int AddFolderPathToRoot(ptree& pt_root,string FolderPath){
 
@@ -465,25 +593,42 @@ int AddFolderPathToRoot(ptree& pt_root,string FolderPath){
 
 }
 
-int AddFilePathToRoot(ptree& pt_root,string FolderPath){
+/*
+ 将FilePath的内容添加进Root
+ 例如:将boxname/foldername1/file1添加进root
+ =================================================
+ in:
+	pt_root 根地址
+	FilePath 为添加文件夹全地址
+		*注意：FilePath第一位为BoxNmae
+	CreatIfNotFound 如果目录不存在是否创建 默认不创建
+ --------------------------------------------------
+ out:(none)
 
-	if(FolderPath == ""){
+ return:
+	 -1或0为创建失败
+	 1为创建成功
+	 -2为路径已存在
+*/
+int AddFilePathToRoot(ptree& pt_root,string FilePath){
+
+	if(FilePath == ""){
 		return -1;
 	}
 
 
-	int pos = FolderPath.find("/");
+	int pos = FilePath.find("/");
 	string str;
 
 	
-	if(pos<0 || pos >= int(FolderPath.length()-1)){//只有boxname
-		return AddNewBox(pt_root,FolderPath);
+	if(pos<0 || pos >= int(FilePath.length()-1)){//只有boxname
+		return AddNewBox(pt_root,FilePath);
 	}else{
-		str = FolderPath;
+		str = FilePath;
 		AddNewBox(pt_root,str.erase(pos));
 		for(auto it=pt_root.get_child("root.boxs").begin();it != pt_root.get_child("root.boxs").end();++it){
 			if(it->second.get("name","") == str){
-				str = FolderPath;
+				str = FilePath;
 				return AddFilePathToFolderNode(it->second,str.erase(0,pos+1));
 			}
 		}
