@@ -7,15 +7,69 @@
 #include <sstream>  
 #include <string>  
 #include <locale>  
+#include <direct.h> //创建目录
+
+
+#include<fstream>
+#include<iomanip>
+#include<io.h>
+//#include<time.h>
+//#include<sstream>
+//#include <windows.h> 
   
 #include "boost/property_tree/ptree.hpp"  
 #include "boost/property_tree/json_parser.hpp"  
 #include "boost/property_tree/ini_parser.hpp"  
 #include "boost/property_tree/xml_parser.hpp"  
 
+
+
  
  using namespace std;
  using namespace boost::property_tree;
+
+int AddFileToFloderNode(ptree& pt_Folder,string FileName,string OtherFullPathInBox);
+
+
+/*
+   将str_root中的Oldestr替换为Newstr
+*/
+string ReplaceString(string str_root,string Oldstr,string Newstr){
+
+	int pos = str_root.find(Oldstr);
+	if(pos >= str_root.length()){
+		return str_root;
+	}
+
+	return str_root.replace(pos,Oldstr.length(),Newstr);
+}
+
+/*
+   从全路径截取出文件名
+   例如:想从全路径"folder1\folder2\file.txt"得到"file.txt"
+        则GetFileNameFromFullPath("folder1\folder2\file.txt");
+   ============================================================
+   in:
+	FullPath 要截取的全路径
+   ------------------------------------------------------------
+   out:(none)
+   ------------------------------------------------------------
+   return:
+	文件名
+*/
+string GetFileNameFromFullPath(string FullPath,string dot = "\\"){
+
+
+	string FileName;
+	if(FullPath.find_last_of(dot) >= FullPath.length()-1){
+		return FullPath;
+	}else{
+		FileName = FullPath.substr(FullPath.find_last_of(dot)+1);
+	}
+
+
+	return FileName;
+}
 
  ostream& operator<<( ostream& os, const pair<int, const ptree&>& rNode )
 {
@@ -103,28 +157,80 @@ int AddNewBox(ptree& pt,string boxname){
 }
 
 /*
-  判断在同一节点下是否存name的文件（夹）
+  判断在文件节点下是否存otherpath
   in:
-  pt 判断的节点，文件夹节点("folders")或文件节点("files")
-  name 要判断的文件(夹)的名
+  pt 判断的节点，文件节点
+  otherpath 判断otherpath是否存在
+  CreatOtherPathInNoexist 如果otherpath不存在是否创建
 
   out:(none)
 
   return:
+
   true 存在
   false 不存在
+
 */
-bool SameNameInOneNode(ptree pt,string name){
+bool SameOtherPathInfileNode(ptree& pt,string otherpath,bool CreatOtherPathInNoexist = false){
+
+	if(pt.empty() == true){
+		return false;
+	}else{
+		try{
+			for(auto it = pt.get_child("otherpaths").begin();it != pt.get_child("otherpaths").end();++it){
+				if(it->second.get<string>("otherpath","") == otherpath){
+					return true;
+				}
+			}
+		}
+		catch(...){
+		}
+
+		if(CreatOtherPathInNoexist){
+			pt.put("otherpaths.otherpath",otherpath);
+			return true;
+		}else{
+			return false;
+		}
+	}
+
+}
+
+/*
+  判断在同一节点下是否存name的文件（夹）
+  in:
+  pt 判断的节点，文件夹节点("folders")或文件节点("files")
+  name 要判断的文件(夹)的名
+  otherpath 判断otherpath是否存在
+  CreatOtherPathInNoexist 如果otherpath不存在是否创建
+
+  out:(none)
+
+  return:
+  2 存在，且otherpath存在
+  1 存在，otherpath不存在
+  -1 不存在
+
+*/
+int SameNameInOneNode(ptree& pt,string name,string otherpath = "",bool CreatOtherPathInNoexist = false){
 
 	if(pt.empty() == true){
 		return false;
 	}else{
 		for(auto it = pt.begin();it != pt.end();++it){
 			if(it->second.get<string>("name","") == name){
-				return true;
+				if(otherpath != ""){
+					if(SameOtherPathInfileNode(it->second,otherpath,CreatOtherPathInNoexist)){
+						return 2;
+					}else{
+						return 1;
+					}
+				}else{
+					return 1;
+				}
 			}
 		}
-		return false;
+		return -1;
 	}
 
 }
@@ -135,7 +241,7 @@ bool SameNameInOneNode(ptree pt,string name){
    pt_root root节点地址
    FileName 要添加文件的文件名
    BoxName 指定Box的名字
-   creatifnotfound 如果指定的Box不存在是否创建，默认为不创建
+   creatifnotfound 如果指定不存在是否创建，默认为不创建
   out:（none)
   return:
    1为成功
@@ -143,7 +249,7 @@ bool SameNameInOneNode(ptree pt,string name){
    -1为失败，不存在box(creatifnotfound == false时才会返回)
    0为失败，原因未知
 */
-int AddFileToBox(ptree& pt_root,string FileName,string BoxName,bool creatifnotfound = false){
+int AddFileToBox(ptree& pt_root,string FileName,string BoxName,bool creatifnotfoundbox = false,string otherpath = ""){
 	
 	try{
 		ptree& NodeBox = pt_root.get_child("root.boxs");
@@ -152,29 +258,22 @@ int AddFileToBox(ptree& pt_root,string FileName,string BoxName,bool creatifnotfo
 			if(it->second.get<string>("name") == BoxName){
 
 				try{
-					if(SameNameInOneNode(it->second.get_child("files"),FileName)){
+					if(SameNameInOneNode(it->second.get_child("files"),FileName,otherpath,true) >= 1){
 						return -2;
 					}
 				}
 				catch(...){
 				}
 
-				ptree NodeFile;
-				NodeFile.put("name",FileName);
-				it->second.put("numfile",it->second.get<int>("numfile",0)+1);
-				it->second.add_child("files.file",NodeFile);
-				return 1;
+				
+				return AddFileToFloderNode(it->second,FileName,otherpath);
 			}
 		}
 	}
 	catch(...){
-	if(creatifnotfound){
+	if(creatifnotfoundbox){
 		AddNewBox(pt_root,BoxName);
-		if(AddFileToBox(pt_root,FileName,BoxName) == 1){
-			return 1;
-		}else{
-			return 0;
-		}
+		return AddFileToBox(pt_root,FileName,BoxName,creatifnotfoundbox,otherpath);
 
 	}else{
 		return -1;
@@ -182,40 +281,6 @@ int AddFileToBox(ptree& pt_root,string FileName,string BoxName,bool creatifnotfo
 	}
 
 	return 0;
-}
-
-/*
-  直接将文件添加至指定Box
-  in:
-   pt_box box节点地址
-   FileName 要添加文件的文件名
-   BoxName 指定Box的名字
-   creatifnotfound 如果指定的Box不存在是否创建，默认为不创建
-  out:（none)
-  return:
-   1为成功
-   -2为有重复的文件名
-   -1为失败，不存在box(creatifnotfound == false时才会返回)
-   0为失败，原因未知
-*/
-int AddFileToBox(ptree& pt_box,string FileName){
-
-
-	try{
-		if(SameNameInOneNode(pt_box.get_child("files"),FileName)){
-			return -2;
-		}
-	}
-	catch(...){
-	}
-
-	pt_box.put("numfile",pt_box.get<int>("numfile",0)+1);
-	ptree NodeFile;
-	NodeFile.put("name",FileName);
-	pt_box.add_child("files.file",NodeFile);
-
-	return 1;
-
 }
 
 
@@ -274,38 +339,32 @@ int AddFolderToBox(ptree& pt,string FolderName,string BoxName,bool creatifnotfou
 	return 0;
 }
 
+
+
 /*
-  直接将文件夹添加至指定Box
-  in:
-   pt_box box节点地址
-   FolderName 要添加的文件夹名
-   BoxName 指定Box的名字
-   creatifnotfound 如果指定的Box不存在是否创建，默认为不创建
-  out:（none)
-  return:
-   1为成功
-   -2为有重复的文件夹
-   -1为失败，不存在box(creatifnotfound == false时才会返回)
-   0为失败，原因未知
+   从全路径截取出box名
+   例如:想从全路径"box1/folder1/file.txt"得到"box1"
+        则GetBoxNameFromFullPathInBox("box1/folder1/file.txt");
+   ============================================================
+   in:
+	FullPathInBox 要截取的全路径
+   ------------------------------------------------------------
+   out:(none)
+   ------------------------------------------------------------
+   return:
+	box件名
 */
-int AddFolderToBox(ptree& pt_box,string FolderName){
+string GetBoxNameFromFullPathInBox(string FullPathInBox){
 
-
-	try{
-		if(SameNameInOneNode(pt_box.get_child("folders"),FolderName)){
-			return -2;
-		}
+	
+	string BoxName;
+	if(FullPathInBox.find('/') == 0 || FullPathInBox.find('/') >= FullPathInBox.length()){
+		return FullPathInBox;
+	}else{
+		BoxName = FullPathInBox.substr(0,FullPathInBox.find('/'));
 	}
-	catch(...){
-	}
 
-	pt_box.put("numfolder",pt_box.get<int>("numfolder",0)+1);
-	ptree NodeFile;
-	NodeFile.put("name",FolderName);
-	pt_box.add_child("files.file",NodeFile);
-
-	return 1;
-
+	return BoxName;
 }
 
 /*
@@ -313,14 +372,22 @@ int AddFolderToBox(ptree& pt_box,string FolderName){
   in:
 	pt_Folder 指定的文件夹节点
 	FileName 要添加的文件名
+	OtherFullPathInBox 当添加文件与其他box中的文件为同一文件时，该值记录其他box的全路径
+	*注意：该函数不会检查OtherFullPathInBox指向的文件是否存在
   out:(none)
   return:
 	-2 文件已存在
 	1 添加成功
+	-1 OtherFullPath与文件名不符
 */
-int AddFileToFloderNode(ptree& pt_Folder,string FileName){
+int AddFileToFloderNode(ptree& pt_Folder,string FileName,string OtherFullPathInBox = ""){
+	if(OtherFullPathInBox != ""){
+		if(GetFileNameFromFullPath(OtherFullPathInBox,"/") != FileName){
+			return -1;
+		}
+	}
 	try{
-		if(SameNameInOneNode(pt_Folder.get_child("files"),FileName) ){
+		if(SameNameInOneNode(pt_Folder.get_child("files"),FileName,OtherFullPathInBox,true) >= 1){
 			return -2;
 		}
 	}
@@ -329,8 +396,12 @@ int AddFileToFloderNode(ptree& pt_Folder,string FileName){
 
 	ptree NodeFile;
 	NodeFile.put("name",FileName);
+	if(OtherFullPathInBox != ""){
+		NodeFile.put("otherpaths.otherpath",OtherFullPathInBox);
+	}
 	pt_Folder.add_child("files.file",NodeFile);
 	pt_Folder.put("numfile",pt_Folder.get<int>("numfile",0)+1);
+	//直接添加OtherFullPathInBox
 	return 1;
 }
 
@@ -392,7 +463,145 @@ string replacestring(string str,string Tostr,string findstr){
 	return value;
 }
 
+bool FilePathExistInFolderNode(ptree pt_Folder,string FullPath,bool FunctionInsideValue_NoNeedInput = false){
+	
+	
+	if(FullPath == ""){
+		return false;
+	}
 
+	//判断最后一位是否为'/'
+	if(FullPath.find_last_of("/") == (FullPath.length()-1)){
+		if(!FunctionInsideValue_NoNeedInput){
+			return false;
+		}
+	}else{
+		FullPath += "/";
+	}
+	
+	int pos = -1;
+	int add = 0;
+		string replacePath = FullPath;
+		pos = FullPath.find("/");
+
+
+		if(pos != FullPath.length()-1){
+			replacePath = replacePath.erase(pos);
+				//创建分支
+			try{
+				add = SameNameInOneNode(pt_Folder.get_child("folders"),replacePath);
+			}
+			catch(...){
+				return false; 
+			}
+
+			if(add < 1 ){
+				return false;
+			}
+
+			try{
+				ptree& NodeFolder = pt_Folder.get_child("folders");
+
+				for(auto it = NodeFolder.begin();it != NodeFolder.end();++it){
+					if(it->second.get<string>("name",replacePath) == replacePath){
+						//pos = FullPath.find("/",pos+1);
+						replacePath = FullPath;
+						return FilePathExistInFolderNode(it->second,replacePath.erase(0,pos+1),true);
+						break;
+					}
+				}
+			}
+			catch(...){
+
+			}
+
+		}else{
+			replacePath = replacePath.erase(pos);
+			try{
+				if(SameNameInOneNode(pt_Folder.get_child("files"),replacePath) < 1){
+					return false;
+				}else{
+					return true;
+				}
+			}
+			catch(...){
+				return false;
+			}
+
+		}
+		
+	
+	return false;
+}
+
+/*
+   看folderFullPath是否在Folder中
+      in:
+	pt_Folder 指定文件夹(或box)的地址
+	FullPath 要添加的文件夹的地址
+	*注意:FullPath中不包括指定文件夹的名字
+	return:
+	true 存在
+	false 不存在
+*/
+bool FolderPathExistInFolderNode(ptree pt_Folder,string FullPath){
+	
+	
+	if(FullPath == ""){
+		return false;
+	}
+
+	//判断最后一位是否为'/'
+	if(FullPath.find_last_of("/") == (FullPath.length()-1)){
+		
+	}else{
+		FullPath += "/";
+	}
+	
+	int pos = -1;
+	int add = 0;
+		string replacePath = FullPath;
+		pos = FullPath.find("/");
+		replacePath = replacePath.erase(pos);
+		try{
+			add = SameNameInOneNode(pt_Folder.get_child("folders"),replacePath);
+		}
+		catch(...){
+			return false; 
+		}
+		
+		if(add < 1 ){
+			return false;
+		}
+
+		if(pos != FullPath.length()-1){
+			try{
+				ptree& NodeFolder = pt_Folder.get_child("folders");
+
+				for(auto it = NodeFolder.begin();it != NodeFolder.end();++it){
+					if(it->second.get<string>("name",replacePath) == replacePath){
+						//pos = FullPath.find("/",pos+1);
+						replacePath = FullPath;
+
+						return (FolderPathExistInFolderNode(it->second,replacePath.erase(0,pos+1)));
+						
+
+						break;
+					}
+				}
+			}
+			catch(...){
+
+			}
+
+		}else{
+
+			return true;
+		}
+		
+	
+	return false;
+}
 /*
    将文件夹添加至文件夹(box)节点,如果路径不存在将会被创建
    例如:
@@ -475,17 +684,18 @@ int AddFolderPathToFolderNode(ptree& pt_Folder,string FullPath){
 	pt_Folder 指定文件夹(或box)的地址
 	FullPath 要添加的文件夹的地址
 	*注意:FullPath中不包括指定文件夹(或box)的名字
+	OtherPath 为其他box中的路径
    -------------------------------------------------------
    out:(none)
    -------------------------------------------------------
    return:
 	0或-1 失败
 	1 创建成功
-	-2 文件夹已存在
+	-2 文件已存在
 
 	*注意:FunctionInsideValue_NoNeedInput为函数迭代需要调用的值，使用者不需要赋值
 */
-int AddFilePathToFolderNode(ptree& pt_Folder,string FullPath,bool FunctionInsideValue_NoNeedInput = false){
+int AddFilePathToFolderNode(ptree& pt_Folder,string FullPath,string OtherPath = "",bool FunctionInsideValue_NoNeedInput = false){
 	
 	
 	if(FullPath == ""){
@@ -515,14 +725,14 @@ int AddFilePathToFolderNode(ptree& pt_Folder,string FullPath,bool FunctionInside
 				return add;
 			}
 
-			try{
+
 				ptree& NodeFolder = pt_Folder.get_child("folders");
 
 				for(auto it = NodeFolder.begin();it != NodeFolder.end();++it){
 					if(it->second.get<string>("name",replacePath) == replacePath){
 						//pos = FullPath.find("/",pos+1);
 						replacePath = FullPath;
-						add = AddFilePathToFolderNode(it->second,replacePath.erase(0,pos+1),true);//!!!!
+						add = AddFilePathToFolderNode(it->second,replacePath.erase(0,pos+1),OtherPath,true);//!!!!
 						if(add == -1 || add == 0){
 							return add;
 						}
@@ -530,18 +740,13 @@ int AddFilePathToFolderNode(ptree& pt_Folder,string FullPath,bool FunctionInside
 						break;
 					}
 				}
-			}
-			catch(...){
 
-			}
 
 		}else{
 			replacePath = replacePath.erase(pos);
 				//创建分支
-			add = AddFileToFloderNode(pt_Folder,replacePath);
-			if(add <= 0){
-				return add;
-			}
+			add = AddFileToFloderNode(pt_Folder,replacePath,OtherPath);
+			return add;
 
 		}
 		
@@ -602,7 +807,7 @@ int AddFolderPathToRoot(ptree& pt_root,string FolderPath){
 	pt_root 根地址
 	FilePath 为添加文件夹全地址
 		*注意：FilePath第一位为BoxNmae
-	CreatIfNotFound 如果目录不存在是否创建 默认不创建
+	
  --------------------------------------------------
  out:(none)
 
@@ -611,32 +816,463 @@ int AddFolderPathToRoot(ptree& pt_root,string FolderPath){
 	 1为创建成功
 	 -2为路径已存在
 */
-int AddFilePathToRoot(ptree& pt_root,string FilePath){
+int AddFilePathToRoot(ptree& pt_root,string FilePath,string OtherPath = ""){
 
 	if(FilePath == ""){
 		return -1;
 	}
-
+	if(FilePath == OtherPath){
+		OtherPath = "";
+	}
 
 	int pos = FilePath.find("/");
 	string str;
 
-	
-	if(pos<0 || pos >= int(FilePath.length()-1)){//只有boxname
-		return AddNewBox(pt_root,FilePath);
+	if(FilePath.find_last_of("/") > (FilePath.length()-1)){
+
+		return -1;
 	}else{
-		str = FilePath;
-		AddNewBox(pt_root,str.erase(pos));
-		for(auto it=pt_root.get_child("root.boxs").begin();it != pt_root.get_child("root.boxs").end();++it){
-			if(it->second.get("name","") == str){
-				str = FilePath;
-				return AddFilePathToFolderNode(it->second,str.erase(0,pos+1));
+
+		if(OtherPath != ""){
+			if(GetFileNameFromFullPath(FilePath,"/") == GetFileNameFromFullPath(OtherPath,"/")){
+
+				//判断OtherPath是否存在
+				try{
+					for(auto it = pt_root.get_child("root.boxs").begin();it != pt_root.get_child("root.boxs").end();++it){
+						if(it->second.get<string>("name") == GetBoxNameFromFullPathInBox(OtherPath)){
+							if(!(FilePathExistInFolderNode(it->second,OtherPath.substr(OtherPath.find("/")+1)))){
+								return -1;//otherPath不存在
+							}else{
+								AddFilePathToRoot(pt_root,OtherPath,FilePath);
+							}
+						}
+					}
+				}
+				catch(...){
+					return -1;//otherPath不存在
+				}
+			}else{
+				return -1;
 			}
 		}
-		return 0;
+
+		if(FilePath.find("/") == FilePath.length()-1){//只有boxname
+		
+			return AddNewBox(pt_root,FilePath);
+		}else{
+			str = FilePath;
+			AddNewBox(pt_root,str.erase(pos));
+			for(auto it=pt_root.get_child("root.boxs").begin();it != pt_root.get_child("root.boxs").end();++it){
+				if(it->second.get("name","") == str){
+					str = FilePath;
+					return AddFilePathToFolderNode(it->second,str.erase(0,pos+1),OtherPath);
+				}
+			}
+			return 0;
+		}
+	}
+
+}
+
+/*
+   替代boost中的write_xml函数
+   in:
+	FullPath 要写入的xml的全路径,如果路径不存在将创建路径
+	pt 要写的ptree
+   out:(none)
+   return:
+	-1 创建失败，FullPath格式不对
+	1 创建成功
+*/
+int write_xml_CHECKPATH(string FullPath,ptree pt){
+
+	string ToPath = FullPath;
+
+	int pos = ToPath.find(".xml");
+	if(pos != ToPath.length()-4){
+		return -1;
+	}
+	//win
+	pos = ToPath.find_last_of("\\");
+	if(pos < int(ToPath.length())-1 && pos >= 0){
+
+
+		ToPath = FullPath.substr(0,pos);
+		cout<<"mkdir"<<endl;
+			system(("mkdir " + ToPath + ">nul 2>nul" ).c_str());
+		cout<<"mkdir---end"<<endl;
+	}
+
+	write_xml(FullPath,pt);
+	return 1;
+}
+
+/*
+   替代boost中的read_xml函数
+   in:
+	FullPath 要写入的xml的全路径,如果路径不存在读取失败
+	pt 要读入的ptree
+   out:
+	pt 读后的
+   return:
+	-1 文件不存在
+	1 创建成功
+*/
+int read_xml_CHECKPATH(string FullPath,ptree& pt){
+
+	
+	
+	_finddata_t file;
+	long lf;
+	if ((lf = _findfirst( FullPath.c_str(), &file)) == -1l) {
+
+		return -1;
+	}else{
+		read_xml(FullPath,pt);
+	}
+	_findclose(lf);
+	return 1;
+}
+
+/*
+	将box输入到xml中
+	in:
+		pt_root 根节点
+		BoxName Box名字
+		FullPathToWrite 要写入.xml文件的全地址
+	out:(none)
+	return:
+		-1 失败
+		1 成功
+*/
+int write_box_xml(ptree pt_root,string BoxName,string FullPathToWrite){
+	try{
+		ptree BoxsNode = pt_root.get_child("root.boxs");
+		
+		for(auto it=BoxsNode.begin();it != BoxsNode.end();++it){
+			if(it->second.get("name","") == BoxName){
+				ptree BoxNode;
+				BoxName.clear();
+				BoxNode.add_child("box",it->second);
+				return write_xml_CHECKPATH(FullPathToWrite,BoxNode);
+				break;
+			}
+		}
+	}
+	catch(...){
+
+	}
+	return -1;
+}
+
+ptree read_box_xml(string BoxName,string FullPathToRead){
+
+	ptree pt_box;
+	pt_box.clear();
+	read_xml_CHECKPATH("FullPathToRead",pt_box);
+	try{
+		pt_box.get_child("box");
+	}
+	catch(...){
 
 	}
 
+	return pt_box;
+}
+
+int AddOtherPathToFileOnBoxNode(ptree & BoxNode,string FullPathInBox,string OtherFullPathInBox,bool FunctionInsideValue_NoNeedInput = false){
+
+	if(FullPathInBox == ""){
+		return -1;
+	}
+
+	//判断最后一位是否为'/'
+	if(FullPathInBox.find_last_of("/") == (FullPathInBox.length()-1)){
+		if(!FunctionInsideValue_NoNeedInput){
+			return -1;
+		}
+	}else{
+		FullPathInBox += "/";
+	}
+	
+	int pos = -1;
+	int add = 0;
+		string replacePath = FullPathInBox;
+		pos = FullPathInBox.find("/");
+
+
+		if(pos != FullPathInBox.length()-1){
+			replacePath = replacePath.erase(pos);
+				//创建分支
+			add = AddFolderToFloderNode(BoxNode,replacePath);
+			if(add == 0 || add == -1){
+				return add;
+			}
+
+			try{
+				ptree& NodeFolder = BoxNode.get_child("folders");
+
+				for(auto it = NodeFolder.begin();it != NodeFolder.end();++it){
+					if(it->second.get<string>("name",replacePath) == replacePath){
+						//pos = FullPath.find("/",pos+1);
+						replacePath = FullPathInBox;
+						add = AddFilePathToFolderNode(it->second,replacePath.erase(0,pos+1),OtherFullPathInBox,true);//!!!!
+						if(add == -1 || add == 0){
+							return add;
+						}
+
+						break;
+					}
+				}
+			}
+			catch(...){
+
+			}
+
+		}else{
+			replacePath = replacePath.erase(pos);
+				//创建分支
+			add = AddFileToFloderNode(BoxNode,replacePath);
+
+			if(add <= 0){
+				return add;
+			}
+			if(add == 2){
+				//需要检查path有没有
+			}
+
+		}
+		
+	
+	return 1;
+}
+
+
+
+void RenamedFolderPathInNode(ptree& ptNode,string OldPath, string NewPath,string itor=""){
+	bool lastfolder = false;
+	if(itor != "" && itor.find("/") >= int(itor.length())){
+		lastfolder = true;
+	}
+
+		try{
+			for(auto it = ptNode.get_child("files").begin();it != ptNode.get_child("files").end();++it){
+				try{
+
+					for(auto it2 = it->second.get_child("otherpaths").begin();
+						it2 != it->second.get_child("otherpaths").end();++it2){
+							string str = it2->second.get_value<string>();
+
+							if(str.find(OldPath) < str.length()-unsigned(1)){
+								it2->second.put_value(NewPath+str.substr(OldPath.length()));
+							}
+					}
+				}
+				catch(...){
+				}
+			}
+		}
+		
+		catch(...){
+
+		}
+
+		try{
+			for(auto it = ptNode.get_child("folders").begin();it != ptNode.get_child("folders").end();++it){
+				if(lastfolder && it->second.get<string>("name","") == itor){
+					it->second.put("name",GetFileNameFromFullPath(NewPath,"/"));
+					RenamedFolderPathInNode(it->second,OldPath,NewPath);
+				}else if(itor != "" && (!lastfolder) && it->second.get<string>("name","") == GetBoxNameFromFullPathInBox(itor)){
+					RenamedFolderPathInNode(it->second,OldPath,NewPath,itor.substr(itor.find("/")+1));
+				}else{
+					RenamedFolderPathInNode(it->second,OldPath,NewPath);
+				}
+			}
+		}
+		
+		catch(...){
+
+		}
+	
+}
+
+
+/*
+   将Box中的文件夹更改名字
+*/
+int RenamedFolderPathInRoot(ptree& pt_root,string OldPath, string NewPath){
+		
+	
+	if(OldPath == "" || NewPath == ""){
+		return 1;
+	}
+
+	//判断最后一位是否为'/'
+	if(OldPath.find_last_of("/") == (OldPath.length()-1)){
+		OldPath.erase(OldPath.length()-1);
+	}else{
+
+	}
+
+	if(NewPath.find_last_of("/") == (NewPath.length()-1)){
+		NewPath.erase(NewPath.length()-1);
+	}else{
+
+	}
+
+	//判断一下是否只有最后一个文件名字不同
+	if(OldPath.substr(0,OldPath.find_last_of("/")>(OldPath.length()-unsigned(1))?
+		0:OldPath.find_last_of("/")) != 
+		NewPath.substr(0,OldPath.find_last_of("/")>(NewPath.length()-unsigned(1))?
+		0:NewPath.find_last_of("/"))){
+		return -1;
+	}
+	bool lastfolder = false;
+	string itor = OldPath;
+	if(itor != "" && itor.find("/") >= int(itor.length())){
+		lastfolder = true;
+	}
+	try{
+		for(auto it = pt_root.get_child("root.boxs").begin(); it != pt_root.get_child("root.boxs").end();++it){
+
+			
+				if(lastfolder && it->second.get<string>("name","") == itor){
+					it->second.put("name",GetFileNameFromFullPath(NewPath,"/"));
+					RenamedFolderPathInNode(it->second,OldPath,NewPath);
+				}else if(itor != "" && (!lastfolder) && it->second.get<string>("name","") == GetBoxNameFromFullPathInBox(itor)){
+					RenamedFolderPathInNode(it->second,OldPath,NewPath,itor.substr(itor.find("/")+1));
+				}else{
+					RenamedFolderPathInNode(it->second,OldPath,NewPath);
+				}
+		}
+	}
+	catch(...){
+
+	}
+	return 1;
+	
+}
+
+void RenamedFilePathInNode(ptree& ptNode,string OldPath, string NewPath ,string itor = ""){
+
+	bool InFileFolder = false;
+	if(itor != "" && GetFileNameFromFullPath(itor,"/") == itor){
+		InFileFolder = true;
+	}
+
+		try{
+			for(auto it = ptNode.get_child("files").begin();it != ptNode.get_child("files").end();++it){
+				try{
+						if(InFileFolder && it->second.get<string>("name") == itor){
+							it->second.put("name",GetFileNameFromFullPath(NewPath,"/"));
+							for(auto it2 = it->second.get_child("otherpaths").begin();
+							it2 != it->second.get_child("otherpaths").end();++it2){
+								string str = it2->second.get_value<string>();
+
+								it2->second.put_value(
+									OldPath.substr(0,OldPath.find_last_of("/")+1)
+									+GetFileNameFromFullPath(NewPath,"/")
+									);
+							}
+							
+						}else{
+
+							bool filenameneedchange = false;
+						
+							for(auto it2 = it->second.get_child("otherpaths").begin();
+								it2 != it->second.get_child("otherpaths").end();++it2){
+									string str = it2->second.get_value<string>();
+
+									if(str == OldPath){
+										filenameneedchange = true;
+										break;
+									}
+							}
+							if(filenameneedchange){
+								it->second.put("name",GetFileNameFromFullPath(NewPath,"/"));
+								for(auto it2 = it->second.get_child("otherpaths").begin();
+								it2 != it->second.get_child("otherpaths").end();++it2){
+									string str = it2->second.get_value<string>();
+
+									it2->second.put_value(
+										OldPath.substr(0,OldPath.find_last_of("/")+1)
+										+GetFileNameFromFullPath(NewPath,"/")
+										);
+								}
+							}
+						}
+				}
+				catch(...){
+				}
+			}
+		}
+		
+		catch(...){
+
+		}
+
+		try{
+			for(auto it = ptNode.get_child("folders").begin();it != ptNode.get_child("folders").end();++it){
+				if(itor == ""){
+					RenamedFilePathInNode(it->second,OldPath,NewPath);
+				}else if(InFileFolder){
+					RenamedFilePathInNode(it->second,OldPath,NewPath);
+				}else{
+					RenamedFilePathInNode(it->second,OldPath,NewPath,itor.substr(itor.find("/")+1));
+				}
+			}
+		}
+		
+		catch(...){
+
+		}
+	
+}
+
+/*
+   将Box中的文件更改名字
+*/
+int RenamedFilePathInRoot(ptree& pt_root,string OldPath, string NewPath){
+		
+	
+	if(OldPath == "" || NewPath == ""){
+		return 1;
+	}
+
+	//判断最后一位是否为'/'
+	if(OldPath.find_last_of("/") == (OldPath.length()-1)){
+		return -1;
+	}else{
+
+	}
+
+	if(NewPath.find_last_of("/") == (NewPath.length()-1)){
+		return -1;
+	}else{
+
+	}
+
+	//判断一下是否只有最后一个文件名字不同
+	if(OldPath.substr(0,OldPath.find_last_of("/")>(OldPath.length()-unsigned(1))?
+		0:OldPath.find_last_of("/")) != 
+		NewPath.substr(0,OldPath.find_last_of("/")>(NewPath.length()-unsigned(1))?
+		0:NewPath.find_last_of("/"))){
+		return -1;
+	}
+
+
+	try{
+		for(auto it = pt_root.get_child("root.boxs").begin(); it != pt_root.get_child("root.boxs").end();++it){
+
+					RenamedFilePathInNode(it->second,OldPath,NewPath,OldPath.substr(OldPath.find("/")+1));
+				
+		}
+	}
+	catch(...){
+
+	}
+	return 1;
+	
 }
 
 #endif
