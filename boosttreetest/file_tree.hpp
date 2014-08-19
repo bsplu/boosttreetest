@@ -28,20 +28,44 @@
  using namespace std;
  using namespace boost::property_tree;
 
-int AddFileToFloderNode(ptree& pt_Folder,string FileName,string OtherFullPathInBox);
-
-
 /*
    将str_root中的Oldestr替换为Newstr
 */
 string ReplaceString(string str_root,string Oldstr,string Newstr){
 
 	int pos = str_root.find(Oldstr);
-	if(pos >= str_root.length()){
+	if(pos >= int(str_root.length())){
 		return str_root;
 	}
 
 	return str_root.replace(pos,Oldstr.length(),Newstr);
+}
+
+
+/*
+   从全路径截取出box名
+   例如:想从全路径"box1/folder1/file.txt"得到"box1"
+        则GetBoxNameFromFullPathInBox("box1/folder1/file.txt");
+   ============================================================
+   in:
+	FullPathInBox 要截取的全路径
+   ------------------------------------------------------------
+   out:(none)
+   ------------------------------------------------------------
+   return:
+	box件名
+*/
+string GetBoxNameFromFullPathInBox(string FullPathInBox){
+
+	
+	string BoxName;
+	if(FullPathInBox.find('/') == 0 || FullPathInBox.find('/') >= FullPathInBox.length()){
+		return FullPathInBox;
+	}else{
+		BoxName = FullPathInBox.substr(0,FullPathInBox.find('/'));
+	}
+
+	return BoxName;
 }
 
 /*
@@ -70,6 +94,9 @@ string GetFileNameFromFullPath(string FullPath,string dot = "\\"){
 
 	return FileName;
 }
+
+namespace filetree{
+int AddFileToFloderNode(ptree& pt_Folder,string FileName,string OtherFullPathInBox);
 
  ostream& operator<<( ostream& os, const pair<int, const ptree&>& rNode )
 {
@@ -341,31 +368,7 @@ int AddFolderToBox(ptree& pt,string FolderName,string BoxName,bool creatifnotfou
 
 
 
-/*
-   从全路径截取出box名
-   例如:想从全路径"box1/folder1/file.txt"得到"box1"
-        则GetBoxNameFromFullPathInBox("box1/folder1/file.txt");
-   ============================================================
-   in:
-	FullPathInBox 要截取的全路径
-   ------------------------------------------------------------
-   out:(none)
-   ------------------------------------------------------------
-   return:
-	box件名
-*/
-string GetBoxNameFromFullPathInBox(string FullPathInBox){
 
-	
-	string BoxName;
-	if(FullPathInBox.find('/') == 0 || FullPathInBox.find('/') >= FullPathInBox.length()){
-		return FullPathInBox;
-	}else{
-		BoxName = FullPathInBox.substr(0,FullPathInBox.find('/'));
-	}
-
-	return BoxName;
-}
 
 /*
   通过文件夹节点，将文件添加至文件夹
@@ -898,9 +901,9 @@ int write_xml_CHECKPATH(string FullPath,ptree pt){
 
 
 		ToPath = FullPath.substr(0,pos);
-		cout<<"mkdir"<<endl;
-			system(("mkdir " + ToPath + ">nul 2>nul" ).c_str());
-		cout<<"mkdir---end"<<endl;
+
+		system(("mkdir " + ToPath + ">nul 2>nul" ).c_str());
+
 	}
 
 	write_xml(FullPath,pt);
@@ -1147,7 +1150,7 @@ int RenamedFolderPathInRoot(ptree& pt_root,string OldPath, string NewPath){
 		}
 	}
 	catch(...){
-
+		return -1;
 	}
 	return 1;
 	
@@ -1263,8 +1266,11 @@ int RenamedFilePathInRoot(ptree& pt_root,string OldPath, string NewPath){
 
 	try{
 		for(auto it = pt_root.get_child("root.boxs").begin(); it != pt_root.get_child("root.boxs").end();++it){
-
+			if(it->second.get<string>("name","") == GetBoxNameFromFullPathInBox(OldPath)){
 					RenamedFilePathInNode(it->second,OldPath,NewPath,OldPath.substr(OldPath.find("/")+1));
+			}else{
+				RenamedFilePathInNode(it->second,OldPath,NewPath);
+			}
 				
 		}
 	}
@@ -1275,5 +1281,67 @@ int RenamedFilePathInRoot(ptree& pt_root,string OldPath, string NewPath){
 	
 }
 
+int FindPtreeAdressByFullPath(ptree & pt_root,string FileFullPath,ptree * needptree){
+
+	ptree * pptree;
+	try{
+		for(auto itbox = pt_root.get_child("root.boxs").begin();itbox != pt_root.get_child("root.boxs").end();++itbox){
+			if(itbox->second.get<string>("name") == GetBoxNameFromFullPathInBox(FileFullPath)){
+				pptree = &(itbox->second);
+				FileFullPath.erase(0,FileFullPath.find("/")+1);
+				unsigned int length_pre(-1),length(FileFullPath.length());
+				if(FileFullPath == GetFileNameFromFullPath(FileFullPath,"/")){
+					return -1;
+				}
+				
+				while(1){
+					if(length_pre == length){
+						return -1;
+					}
+					if(FileFullPath.find("/") >= FileFullPath.length()){//已到达最后一个文件夹
+						try{
+							for(auto itfile = (*pptree).get_child("files").begin();itfile != (*pptree).get_child("files").end();++itfile){
+								if(itfile->second.get<string>("name","") == FileFullPath){
+									//找到
+									needptree = &(itfile->second);
+									return 1;
+								}
+							}
+						}
+						catch(...){
+							(*needptree).clear();
+							return -1;
+						}
+					}else{
+						try{
+							for(auto itfolder=(*pptree).get_child("folders").begin();
+								itfolder !=(*pptree).get_child("folders").end();++itfolder){
+									if(itfolder->second.get<string>("name") == GetBoxNameFromFullPathInBox(FileFullPath)){
+										pptree = &(itfolder->second);
+										FileFullPath.erase(0,FileFullPath.find("/")+1);
+										break;
+									}
+							}
+						}
+						catch(...){
+							
+							return -1;
+						}
+
+					}
+					length_pre = length;
+					length = FileFullPath.length();
+				}
+
+			}
+		}
+
+	}
+	catch(...){
+		
+		return -1;
+	}
+}
+}
 #endif
  
