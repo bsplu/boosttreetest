@@ -1,0 +1,9 @@
+总用量 24
+drwxrwxr-x  4 bs bs 4096  2月 15 11:41 ./
+drwxrwxr-x 15 bs bs 4096  2月 15 11:40 ../
+drwxrwxr-x  2 bs bs 4096  2月 15 11:40 boosttreetest/
+drwxrwxr-x  8 bs bs 4096  2月 15 11:40 .git/
+-rw-rw-r--  1 bs bs  483  2月 15 11:40 .gitattributes
+-rw-rw-r--  1 bs bs  727  2月 15 11:40 .gitignore
+-rw-rw-r--  1 bs bs    0  2月 15 11:41 test1.txt
+-rw-rw-r--  1 bs bs    0  2月 15 11:41 test2.txt
